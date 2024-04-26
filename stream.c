@@ -2012,6 +2012,7 @@ static void pes_add_subtitle_to_title(
                     subtitle->format = PICTURESUB;
                     subtitle->config.dest = RENDERSUB;
                     break;
+                case AV_CODEC_ID_ARIB_CAPTION:
                 case AV_CODEC_ID_DVD_SUBTITLE:
                     subtitle->source = VOBSUB;
                     subtitle->format = PICTURESUB;
@@ -2603,7 +2604,8 @@ static inline int bits_skip(bitbuf_t *bb, int bits)
 static void decode_element_descriptors(
     hb_stream_t   *stream,
     int           pes_idx,
-    bitbuf_t   *bb)
+    bitbuf_t   *bb,
+    uint8_t  stream_type)
 {
     int ii;
 
@@ -2692,6 +2694,20 @@ static void decode_element_descriptors(
                 bits_skip(bb, 8 * len);
             } break;
 
+            case 0xfd:  // Aribcaption descriptor
+            {
+				if(stream_type == 0x06)	// private data
+				{
+					stream->pes.list[pes_idx].stream_type = 0x00;
+					stream->pes.list[pes_idx].stream_kind = S;
+					stream->pes.list[pes_idx].codec = WORK_DECAVSUB;
+					stream->pes.list[pes_idx].codec_param = AV_CODEC_ID_ARIB_CAPTION;
+					strncpy(stream->pes.list[pes_idx].codec_name,
+							"ARIB Subtitling", 80);
+				}
+				bits_skip(bb, 8 * len);
+            } break;
+
             default:
                 bits_skip(bb, 8 * len);
                 break;
@@ -2775,7 +2791,7 @@ int decode_program_map(hb_stream_t* stream)
             bitbuf_t bb_desc;
             bits_clone( &bb_desc, &bb, info_len );
             if ( pes_idx >= 0 )
-                decode_element_descriptors( stream, pes_idx, &bb_desc );
+                decode_element_descriptors( stream, pes_idx, &bb_desc, stream_type );
             bits_skip(&bb, 8 * info_len);
         }
 
@@ -3845,7 +3861,7 @@ static int decode_ps_map( hb_stream_t * stream, uint8_t *buf, int len )
             bitbuf_t bb_desc;
             bits_clone( &bb_desc, &bb, info_len );
             if ( pes_idx >= 0 )
-                decode_element_descriptors( stream, pes_idx, &bb_desc );
+                decode_element_descriptors( stream, pes_idx, &bb_desc, stream_type );
             bits_skip(&bb, 8 * info_len);
         }
         ii++;
